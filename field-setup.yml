@@ -1,0 +1,120 @@
+---
+- name: DHT Field Setup
+  remote_user: root
+  hosts: all
+
+  # cert and key file location on each host
+  environment:
+    SCION_CERT_FILE: /field_setup/cert.pem
+    SCION_CERT_KEY_FILE: /field_setup/key.pem
+
+  vars:
+    date: "{{ ansible_date_time.year }}-{{ ansible_date_time.month }}-{{ ansible_date_time.day }}"
+    time: "{{ ansible_date_time.hour }}-{{ ansible_date_time.minute }}-{{ ansible_date_time.second }}"
+    logfile_name: "{{ date }}-{{ time }}-dht.log"
+
+  tasks:
+    - name: remove old logfiles
+      shell: "rm *-dht.log || true"
+
+    - name: kill all active torrent-clients
+      shell: pkill -f torrent-client
+      ignore_errors: true
+
+    - name: start CA1, bootstrap seeder
+      when: 
+       - inventory_hostname == "ca1"
+      shell: >
+        /root/go/bin/torrent-client
+        -inPath=/field_setup/alpine-dht.torrent
+        -peer="{{ IA }},[{{ ansible_host }}]:{{ torrent_port }}"
+        -seed=true
+        -file=/field_setup/alpine-standard-3.14.2-x86.iso
+        -enableDht=true
+        -dhtPort={{ dht_port }}
+        -logLevel=TRACE 2>> {{ logfile_name }}
+      async: 6000
+      poll: 0
+
+    - name: sleep
+      pause:
+        seconds: 20
+
+    - name: start CA2, leecher 
+      when: 
+       - inventory_hostname == "ca2"
+      shell: >
+        /root/go/bin/torrent-client
+        -inPath=/field_setup/alpine-dht.torrent
+        -outPath=/field_setup/alpine.iso
+        -local="{{ IA }},[{{ ansible_host }}]:{{ torrent_port }}"
+        -seed=false
+        -enableDht=true
+        -dhtPort={{ dht_port }}
+        -logLevel=TRACE 
+        -keepAlive=true
+        2>> {{ logfile_name }}
+      async: 6000
+      poll: 0
+
+    - name: sleep
+      pause:
+        seconds: 20
+
+    - name: start CB1, seeder
+      when: 
+       - inventory_hostname == "cb1"
+      shell: >
+        /root/go/bin/torrent-client
+        -inPath=/field_setup/alpine-dht.torrent 
+        -peer="{{ IA }},[{{ ansible_host }}]:{{ torrent_port }}"
+        -seed=true 
+        -file=/field_setup/alpine-standard-3.14.2-x86.iso 
+        -enableDht=true 
+        -logLevel=TRACE 
+        -dhtPort={{ dht_port }}
+        2>> {{ logfile_name }}
+      async: 6000
+      poll: 0
+
+    - name: sleep
+      pause:
+        seconds: 10
+
+    - name: kill bootstrap node
+      when: 
+       - inventory_hostname == "ca1"
+      shell: pkill -f torrent-client
+      ignore_errors: true
+
+    - name: sleep
+      pause:
+        seconds: 10
+
+    - name: start CB2, leecher 
+      when: 
+       - inventory_hostname == "cb2"
+      shell: >
+        /root/go/bin/torrent-client
+        -inPath=/field_setup/alpine-dht.torrent
+        -outPath=/field_setup/alpine.iso
+        -local="{{ IA }},[{{ ansible_host }}]:{{ torrent_port }}"
+        -seed=false
+        -enableDht=true
+        -dhtPort={{ dht_port }}
+        -dhtBootstrapAddr="{{ hostvars['ca2'].IA }},[{{ hostvars['ca2'].ansible_host }}]:{{ hostvars['ca2'].dht_port }}"
+        -logLevel=TRACE
+        2>> {{ logfile_name }}
+    
+    - name: sleep
+      pause:
+        seconds: 1
+
+    - name: download logs
+      fetch:
+        src: "{{ logfile_name }}"
+        dest: "{{ playbook_dir }}/results/{{ inventory_hostname }}_{{ logfile_name }}"
+        flat: yes
+
+    - name: remove logfile
+      shell: "rm {{ logfile_name }}"

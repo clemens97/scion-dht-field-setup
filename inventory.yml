@@ -1,0 +1,26 @@
+all:
+  hosts:
+  vars:
+    torrent_port: 42423
+    dht_port: 7575
+  children:
+    scion_as_a:
+      hosts:
+        ca1:
+          ansible_host: 116.203.208.126
+          seeder: true
+        ca2:
+          ansible_host: 23.88.103.31
+          seeder: false
+      vars:
+        IA: 19-ffaa:1:e94
+    scion_as_b:
+      hosts:
+        cb1:
+          ansible_host: 116.203.182.170
+          seeder: true
+        cb2:
+          ansible_host: 116.203.232.136
+          seeder: false
+      vars:
+        IA: 18-ffaa:1:ebf

@@ -1,0 +1,33 @@
+---
+- name: prepare torrent file and file to be shared
+  remote_user: root
+  hosts: all
+
+  tasks:
+    - name: setup field test directory
+      file: 
+        path: /field_setup/
+        state: directory
+
+    - name: download original file
+      when: seeder == true
+      get_url:
+        url: https://dl-cdn.alpinelinux.org/alpine/v3.14/releases/x86/alpine-standard-3.14.2-x86.iso
+        dest: /field_setup/alpine-standard-3.14.2-x86.iso
+        mode: '0664'
+        
+    - name: upload prepared torrent file
+      copy:
+        src: "{{ playbook_dir }}/alpine-dht.torrent"
+        dest: /field_setup/alpine-dht.torrent
+    - name: create certificates
+      shell: >
+        openssl req 
+        -nodes 
+        -x509 
+        -newkey rsa:4096 
+        -keyout /field_setup/key.pem 
+        -out /field_setup/cert.pem 
+        -sha256 
+        -days 365 
+        -subj '/CN=localhost'

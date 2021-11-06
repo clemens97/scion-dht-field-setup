@@ -1,0 +1,8 @@
+---
+- name: install torrent client
+  remote_user: root
+  hosts: all
+
+  tasks:
+    - name: install torrent client
+      shell: /root/go/bin/go1.16.9 install github.com/martenwallewein/torrent-client@{{ version }}
